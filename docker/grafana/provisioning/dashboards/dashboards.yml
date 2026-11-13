@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: orders-mcp
+    folder: MCP
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards
