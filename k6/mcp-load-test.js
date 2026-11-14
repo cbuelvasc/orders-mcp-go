@@ -5,6 +5,7 @@ import { check, sleep } from 'k6';
 
 const MCP = __ENV.MCP_URL || 'http://localhost:8080/mcp';
 const TOKEN_URL = __ENV.TOKEN_URL || 'http://localhost:8180/realms/orders/protocol/openid-connect/token';
+const MCP_HOST = __ENV.MCP_HOST; // Host header override: the server only accepts localhost (DNS-rebinding protection)
 const CLIENT_ID = __ENV.CLIENT_ID || 'orders-readonly';
 const CLIENT_SECRET = __ENV.CLIENT_SECRET || 'orders-readonly-secret'; // demo realm secret
 
@@ -36,6 +37,7 @@ function headers(token, session) {
     Accept: 'application/json, text/event-stream',
     Authorization: `Bearer ${token}`,
   };
+  if (MCP_HOST) h['Host'] = MCP_HOST;
   if (session) h['Mcp-Session-Id'] = session;
   return h;
 }

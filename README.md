@@ -136,7 +136,8 @@ Architecture rules (`internal/archtest`):
 ## ⚡ Load test
 
 ```bash
-k6 run k6/mcp-load-test.js
+make loadtest                 # k6 in Docker (compose profile `loadtest`), summary in k6/results/go.json
+k6 run k6/mcp-load-test.js    # or with a local k6
 ```
 
 Same script and thresholds as the Java version: real `client_credentials` token, ramp to 200 tool calls/second.

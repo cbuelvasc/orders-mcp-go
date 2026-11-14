@@ -1,4 +1,4 @@
-.PHONY: up down run test integration lint build
+.PHONY: up down run test integration lint build loadtest
 
 up:            ## start Postgres, Keycloak, Prometheus and Grafana
 	docker compose up -d
@@ -20,3 +20,6 @@ lint:
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/orders-mcp ./cmd/server
+
+loadtest:      ## k6 load test in Docker (needs `make up` + `make run`); summary in k6/results/go.json
+	docker compose --profile loadtest run --rm k6
