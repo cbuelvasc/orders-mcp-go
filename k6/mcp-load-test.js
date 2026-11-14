@@ -47,39 +47,55 @@ function rpc(token, session, id, method, params, tag) {
   return http.post(MCP, body, { headers: headers(token, session), tags: { tool: tag || method } });
 }
 
-export function setup() {
+// Per-VU state: every virtual user is one agent with its own token and MCP session.
+// (A session shared by all VUs gets "duplicate in-flight request ID" errors from the server,
+// and a token returned from setup() would end up in the --summary-export file.)
+let agent = null;
+let nextId = 1;
+
+function connect() {
   // OAuth 2.1 client_credentials: what an autonomous agent would do
   const tokenRes = http.post(TOKEN_URL, {
     grant_type: 'client_credentials',
     client_id: CLIENT_ID,
     client_secret: CLIENT_SECRET,
     scope: 'orders:read',
-  });
-  check(tokenRes, { 'got token': (r) => r.status === 200 });
+  }, { tags: { tool: 'token' } });
+  if (!check(tokenRes, { 'got token': (r) => r.status === 200 })) return null;
   const token = tokenRes.json('access_token');
 
-  const init = rpc(token, null, 1, 'initialize', {
+  const init = rpc(token, null, nextId++, 'initialize', {
     protocolVersion: '2025-06-18',
     capabilities: {},
     clientInfo: { name: 'k6-agent', version: '1.0.0' },
   });
-  check(init, { 'initialize ok': (r) => r.status === 200 });
+  if (!check(init, { 'initialize ok': (r) => r.status === 200 })) return null;
   const session = init.headers['Mcp-Session-Id'];
   http.post(MCP, JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
-    { headers: headers(token, session) });
+    { headers: headers(token, session), tags: { tool: 'initialized' } });
   return { token, session };
 }
 
-export default function ({ token, session }) {
+// Log the status and body of failed calls, to find out why they fail (k6 ... 2> errors.log)
+function logFailure(res) {
+  if (res.status !== 200) console.warn(`${res.status} ${String(res.body).slice(0, 150)}`);
+}
+
+export default function () {
+  if (!agent) agent = connect();
+  if (!agent) { sleep(1); return; }
+  const { token, session } = agent;
   if (Math.random() < 0.7) {
     const orderId = `ORD-${1000 + Math.floor(Math.random() * 60)}`;
-    const res = rpc(token, session, 2, 'tools/call',
+    const res = rpc(token, session, nextId++, 'tools/call',
       { name: 'findOrder', arguments: { orderId } }, 'findOrder');
-    check(res, { 'findOrder 200': (r) => r.status === 200, 'has order': (r) => r.body.includes(orderId) });
+    logFailure(res);
+    check(res, { 'findOrder 200': (r) => r.status === 200, 'has order': (r) => String(r.body).includes(orderId) });
   } else {
     const customerId = `CUS-${1 + Math.floor(Math.random() * 6)}`;
-    const res = rpc(token, session, 3, 'tools/call',
+    const res = rpc(token, session, nextId++, 'tools/call',
       { name: 'listRecentOrders', arguments: { customerId, limit: 5 } }, 'listRecentOrders');
+    logFailure(res);
     check(res, { 'listRecentOrders 200': (r) => r.status === 200 });
   }
   sleep(0.1);
