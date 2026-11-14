@@ -15,6 +15,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin   # local demo only
+      KC_HOSTNAME: http://localhost:8180   # fixed issuer, also for tokens requested from inside the network (k6)
     volumes:
       - ./docker/keycloak/orders-realm.json:/opt/keycloak/data/import/orders-realm.json:ro
     ports:
@@ -39,3 +40,19 @@ services:
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3000:3000"
+
+  k6:                                  # load test, on demand: `make loadtest` (needs `make run`)
+    image: grafana/k6:2.3.0
+    profiles: ["loadtest"]
+    command: run --summary-export=/results/go.json /scripts/mcp-load-test.js
+    environment:
+      MCP_URL: http://host.docker.internal:8080/mcp          # server runs on the host
+      MCP_HOST: localhost:8080                               # server rejects non-localhost Host headers
+      TOKEN_URL: http://keycloak:8180/realms/orders/protocol/openid-connect/token
+    volumes:
+      - ./k6:/scripts:ro
+      - ./k6/results:/results
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - keycloak
